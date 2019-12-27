@@ -92,8 +92,17 @@ class SkipGram:
             self.loss = 0  # 每个epoch首先将loss初始化
             for w_c, w_t in training_data:
                 y_predict, hidden, output = self.forward(w_t)
-                pass
+                EI = np.sum([np.subtract(y_predict, word) for word in w_c], axis=0)
+                self.backprop(EI, hidden, output)
 
+                # Calculate loss
+                # There are 2 parts to the loss function
+                # Part 1: -ve sum of all the output +
+                # Part 2: length of context words * log of sum for all elements (exponential-ed) in the output layer before softmax (u)
+                # Note: word.index(1) returns the index in the context word vector with value 1
+                # Note: u[word.index(1)] returns the value of the output layer before softmax
+                self.loss += -np.sum([u[word.index(1)] for word in w_c]) + len(w_c) * np.log(np.sum(np.exp(u)))
+            print('Epoch:', i, "Loss:", self.loss)
 
     def forward(self, x):
         # x [1,V] dot [V,N] = [1, N]
@@ -106,6 +115,25 @@ class SkipGram:
     def softmax(self, x):
         e_x = np.exp(x)
         return e_x / e_x.sum(axis=0)
+
+    def backprop(self, e, h, x):
+        # https://docs.scipy.org/doc/numpy-1.15.1/reference/generated/numpy.outer.html
+        # Column vector EI represents row-wise sum of prediction errors across each context word for the current center word
+        # Going backwards, we need to take derivative of E with respect of w2
+        # h - shape 10x1, e - shape 9x1, dl_dw2 - shape 10x9
+        dl_dw2 = np.outer(h, e)
+        # x - shape 1x8, w2 - 5x8, e.T - 8x1
+        # x - 1x8, np.dot() - 5x1, dl_dw1 - 8x5
+        dl_dw1 = np.outer(x, np.dot(self.w2, e.T))
+        # Update weights
+        self.w1 = self.w1 - (self.lr * dl_dw1)
+        self.w2 = self.w2 - (self.lr * dl_dw2)
+
+    # Get vector from word
+    def word_vec(self, word, word_index):
+        w_index = word_index[word]
+        v_w = self.w1[w_index]
+        return v_w
 
 
 if __name__ == '__main__':
